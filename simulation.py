@@ -4,18 +4,19 @@
 
 import csv
 import Queue
-import time
+import urllib2
 
 amazon_url_csv = 'http://s3.amazonaws.com/cuny-is211-spring2015/requests.csv'
 
 def downloadData(url=str):
     """This function reads and prints the contents located at the url."""
-    import urllib2
     response = urllib2.urlopen(url)
     html = response.read()
-    print(html)
 
-downloadData(amazon_url_csv)
+    html = html.split("\r\n")
+    for x in range(0, len(html)):
+        html[x] = html[x].split(',')
+    return html
 
 class Queue:
     def __init__(self):
@@ -33,84 +34,103 @@ class Queue:
     def size(self):
         return len(self.items)
 
-# class Server:
-#     def __init__(self, ppm):
-#         self.page_rate = ppm
-#         self.current_task = None
-#         self.time_remaining = 0
-#
-#     def tick(self):
-#         if self.current_task != None:
-#             self.time_remaining = self.time_remaining - 1
-#             if self.time_remaining <= 0:
-#                 self.current_task = None
-#
-#     def busy(self):
-#         if self.current_task != None:
-#             return True
-#         else:
-#             return False
-#
-#     def start_next(self, new_task):
-#         self.current_task = new_task
-#         self.time_remaining = new_task.get_pages() * 60/self.page_rate
-#
-# class Request:
-#     def __init__(self, time):
-#         self.timestamp = time
-#         self.pages = random.randrange(1, 21)
-#
-#     def get_stamp(self):
-#         return self.timestamp
-#     def get_pages(self):
-#         return self.pages
-#     def wait_time(self, current_time):
-#         return current_time - self.timestamp
-#
-#     def simulation(num_seconds, pages_per_minute):
-#         lab_printer = Printer(pages_per_minute)
-#         print_queue = Queue()
-#         waiting_times = []
-#         for current_second in range(num_seconds):
-#             if new_print_task():
-#                 task = Task(current_second)
-#                 print_queue.enqueue(task)
-#
-#             if (not lab_printer.busy()) and (not print_queue.is_empty()):
-#                 next_task = print_queue.dequeue()
-#                 waiting_times.append(next_task.wait_time(current_second))
-#                 lab_printer.startNext(next_task)
-#
-#             lab_printer.tick()
-#
-#         average_wait = sum(waiting_times) / len(waiting_times)
-#         print("Average Wait %6.2f secs %3d tasks remaining."
-#             %(average_wait, print_queue.size()))
-#
-#     def new_print_task():
-#         num = random.randrange(1, 181)
-#         if num == 180:
-#             return True
-#         else:
-#             return False
-#
-#         for i in range(10):
-#             simulation(3600, 5)
 
-#simulateOneServer() = 'http://s3.amazonaws.com/cuny-is211-spring2015/requests.csv'
+class Server:
+    def __init__(self):
+        self.current_task = None
+        self.time_remaining = 0
 
+    def tick(self):
+        if self.current_task != None:
+            self.time_remaining = self.time_remaining - 1
+            if self.time_remaining <= 0:
+                self.current_task = None
 
-#start = time.time()
-# end = time.time()
-# return end-start
+    def busy(self):
+        if self.current_task != None:
+            return True
+        else:
+            return False
 
+    def start_next(self, new_task):
+        self.current_task = new_task
+        self.time_remaining = new_task.get_processing_time()
 
-#def simulateOneServer():
-#"""This function prints the average wait time a request was on the server before it was processed."""
+class Request:
+    def __init__(self, time, file, pt):
+        self.timestamp = time
+        self.filename = file
+        self.processingtime = pt
 
+    def get_stamp(self):
+        return self.timestamp
 
-#def main(--file, --servers = int):
+    def get_filename(self):
+        return self.filename
 
+    def get_processing_time(self):
+        return self.processingtime
 
-#if __name__ == "__main__":
-    #main()
+def simulateOneServer(filename):
+    temp_server = Server()
+    temp_queue = Queue()
+    waiting_times = []
+
+    kerry_temp_list = downloadData(filename)
+
+    for current_task in kerry_temp_list:
+        task = Request(int(current_task[0]), current_task[1], int(current_task[2]))
+        temp_queue.enqueue(task)
+
+        if (not temp_server.busy()) and (not temp_queue.is_empty()):
+            next_task = temp_queue.dequeue()
+
+            waiting_times.append(next_task.processingtime)
+            temp_server.start_next(next_task)
+
+        temp_server.tick()
+
+    average_wait = sum(waiting_times) / len(waiting_times)
+    print("Average Wait %6.2f secs %3d tasks remaining."
+        %(average_wait, temp_queue.size()))
+
+def simulateManyServers(filename, servers):
+    kerry_temp_list = downloadData(filename)
+
+    tempservers = []
+    tempqueues = []
+    tempwaitingtimes = []
+
+    for x in range(servers):
+        tempservers.append(Server())
+        tempqueues.append(Queue())
+        tempwaitingtimes.append([])
+
+    counter = 0
+    for current_task in kerry_temp_list:
+        task = Request(int(current_task[0]), current_task[1], int(current_task[2]))
+        tempqueues[counter%servers].enqueue(task)
+
+        if (not tempservers[counter%servers].busy()) and (not tempqueues[counter%servers].is_empty()):
+            next_task = tempqueues[counter%servers].dequeue()
+
+            tempwaitingtimes[counter%servers].append(next_task.processingtime)
+            tempservers[counter%servers].start_next(next_task)
+
+        tempservers[counter%servers].tick()
+        counter += 1
+    for x in range(servers):
+        average_wait = sum(tempwaitingtimes[x]) / len(tempwaitingtimes[x])
+        print("Average Wait %6.2f secs %3d tasks remaining on server %d."
+        %(average_wait, tempqueues[x].size(), x))
+
+def main(file = amazon_url_csv, servers=6):
+    if servers==1:
+        simulateOneServer(file)
+    else:
+        simulateManyServers(file, servers)
+
+if __name__ == "__main__":
+    main()
+
+#Answer to Question from Part 3: As the amount of servers increase, the processing time decreases.
